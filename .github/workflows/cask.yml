@@ -1,0 +1,73 @@
+# Checks every cask pull request before a CODEOWNER reviews it: no install-time
+# steps or quarantine handling, Homebrew's style and audit, then a real install
+# from the cask's own URL and hashes, and the installed binary's version.
+name: cask
+
+# No paths filter: `cask` is a required check on main, so it must report on
+# every pull request (it passes at once when there is no cask to check).
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cask-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+  HOMEBREW_NO_ANALYTICS: "1"
+  HOMEBREW_NO_ENV_HINTS: "1"
+
+jobs:
+  cask:
+    # Only branches of this repository (the release pipeline's): a fork's
+    # pull request would make the runner download and run whatever it names.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: No install-time steps, no quarantine handling, versioned URLs
+        run: |
+          set -eu
+          [ -d Casks ] || { echo "no Casks/ yet: nothing to check"; exit 0; }
+          for f in Casks/*.rb; do
+            if grep -v '^ *#' "$f" | grep -Eiq 'preflight|postflight|uninstall_preflight|uninstall_postflight|system_command|quarantine|xattr|installer'; then
+              echo "::error file=$f::a cask here runs no step of its own and never touches quarantine"
+              exit 1
+            fi
+          done
+          if [ -f Casks/boris.rb ]; then
+            grep -Eq '^  url "https://[a-z0-9.-]+/boris/v#\{version\}/boris-#\{version\}-#\{arch\}-apple-darwin\.tar\.gz"$' Casks/boris.rb ||
+              { echo "::error file=Casks/boris.rb::url must be the immutable https://<release host>/boris/v#{version}/ archive"; exit 1; }
+          fi
+
+      - name: Tap this checkout
+        run: |
+          set -eu
+          tap="$(brew --repository)/Library/Taps/affinidi-ai/homebrew-tap"
+          mkdir -p "$(dirname "$tap")"
+          rm -rf "$tap"
+          cp -R "$GITHUB_WORKSPACE" "$tap"
+
+      - name: Style, audit, install, run
+        run: |
+          set -eu
+          [ -d Casks ] || exit 0
+          for f in Casks/*.rb; do
+            name="affinidi-ai/tap/$(basename "$f" .rb)"
+            version=$(sed -n 's/^  version "\(.*\)"$/\1/p' "$f")
+            brew style --cask "$name"
+            brew audit --cask --online "$name"
+            brew install --cask "$name"
+            if [ "$name" = affinidi-ai/tap/boris ]; then
+              boris --version | grep -F "boris $version " ||
+                { echo "::error file=$f::the installed boris does not report $version"; exit 1; }
+            fi
+            brew uninstall --cask "$name"
+          done
