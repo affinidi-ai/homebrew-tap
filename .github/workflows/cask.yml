@@ -65,8 +65,12 @@ jobs:
             brew style --cask "$name"
             # A pre-release never moves the release host's latest.json, which
             # the cask's livecheck reads, so livecheck cannot match an rc.
+            # hosting_with_livecheck (no livecheck block) and
+            # livecheck_https_availability (an https livecheck) run the same
+            # version comparison, so they are skipped with it.
             case $version in
-              *-*) brew audit --cask --online --except=livecheck_version "$name" ;;
+              *-*) brew audit --cask --online \
+                     --except=livecheck_version,hosting_with_livecheck,livecheck_https_availability "$name" ;;
               *) brew audit --cask --online "$name" ;;
             esac
             brew install --cask "$name"
