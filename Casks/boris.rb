@@ -18,7 +18,7 @@ cask "boris" do
   desc "Command-line client for Boris: sign in, plan and apply changes, run the tunnel"
   homepage "https://trustboris.ai/cli"
 
-  depends_on macos: ">= :monterey"
+  depends_on macos: :monterey
 
   binary "boris"
 end
