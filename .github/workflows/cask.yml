@@ -63,7 +63,12 @@ jobs:
             name="affinidi-ai/tap/$(basename "$f" .rb)"
             version=$(sed -n 's/^  version "\(.*\)"$/\1/p' "$f")
             brew style --cask "$name"
-            brew audit --cask --online "$name"
+            # A pre-release never moves the release host's latest.json, which
+            # the cask's livecheck reads, so livecheck cannot match an rc.
+            case $version in
+              *-*) brew audit --cask --online --except=livecheck_version "$name" ;;
+              *) brew audit --cask --online "$name" ;;
+            esac
             brew install --cask "$name"
             if [ "$name" = affinidi-ai/tap/boris ]; then
               boris --version | grep -F "boris $version " ||
