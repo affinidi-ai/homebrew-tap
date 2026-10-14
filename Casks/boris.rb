@@ -9,9 +9,9 @@
 cask "boris" do
   arch arm: "aarch64", intel: "x86_64"
 
-  version "0.1.0-rc.16"
-  sha256 arm:   "7550948553b5b9e34877cb1d7e3e9242b92c6f425f932e3465f61a17cba9422e",
-         intel: "ebf4cb74b4fa98ae606581210a335384d09a093fd47caa560875ce0f92d027a0"
+  version "0.1.0-rc.17"
+  sha256 arm:   "c4c2e0adda92c2c0548d67750c4ef12d8d74df1c93718d889d6dbf3909a02446",
+         intel: "ee0a399c1834ea0d2b9e335e5a3fc9c58a9e252c14ef611c897bea2844848ba7"
 
   url "https://releases.trustboris.ai/boris/v#{version}/boris-#{version}-#{arch}-apple-darwin.tar.gz"
   name "boris"
