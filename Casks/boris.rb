@@ -9,14 +9,23 @@
 cask "boris" do
   arch arm: "aarch64", intel: "x86_64"
 
-  version "0.1.0-rc.8"
-  sha256 arm:   "7ed7168ea3b40f259034becd6e1914f3d77b285ab9ae498b0478db2108a8d70a",
-         intel: "6a2891196973fefb1b02d26b20e0b384e1c6446a3f9228d537b9e74efaf12b3c"
+  version "0.1.0-rc.10"
+  sha256 arm:   "c513de49372a6b7ce7fe067455ed1453a81d55e7c71fdce035339f16642a856b",
+         intel: "499c6d9a2f90cf247d53e7100540989daa3db1e948d63c475ad4241fd3a3aab1"
 
   url "https://releases.trustboris.ai/boris/v#{version}/boris-#{version}-#{arch}-apple-darwin.tar.gz"
   name "boris"
   desc "Command-line client for Boris: sign in, plan and apply changes, run the tunnel"
   homepage "https://trustboris.ai/cli"
+
+  # The signed pointer to the newest stable release; a pre-release never
+  # moves it, so the tap's audit skips this check for an rc.
+  livecheck do
+    url "https://releases.trustboris.ai/boris/latest.json"
+    strategy :json do |json|
+      json["version"]
+    end
+  end
 
   depends_on macos: :monterey
 
