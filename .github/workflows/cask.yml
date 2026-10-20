@@ -109,14 +109,19 @@ jobs:
             # livecheck_https_availability (an https livecheck) run the same
             # version comparison, so they are skipped with it, for an rc and
             # for a cask this pull request doesn't change.
-            livecheck=yes
-            case $version in *-*) livecheck=no ;; esac
-            printf '%s\n' "$changed" | grep -qxF "$f" || livecheck=no
-            if [ "$livecheck" = yes ]; then
-              HOMEBREW_GITHUB_API_TOKEN="$audit_token" brew audit --cask --online "$name"
+            skip=
+            case $version in *-*) skip=livecheck_version,hosting_with_livecheck,livecheck_https_availability ;; esac
+            printf '%s\n' "$changed" | grep -qxF "$f" ||
+              skip=livecheck_version,hosting_with_livecheck,livecheck_https_availability
+            # homebrew/core has an unrelated `fabric` formula, so this cask is
+            # only ever installed by its full name, affinidi-ai/tap/fabric.
+            if [ "$name" = affinidi-ai/tap/fabric ]; then
+              skip=${skip:+$skip,}token_conflicts
+            fi
+            if [ -n "$skip" ]; then
+              HOMEBREW_GITHUB_API_TOKEN="$audit_token" brew audit --cask --online --except="$skip" "$name"
             else
-              HOMEBREW_GITHUB_API_TOKEN="$audit_token" brew audit --cask --online \
-                --except=livecheck_version,hosting_with_livecheck,livecheck_https_availability "$name"
+              HOMEBREW_GITHUB_API_TOKEN="$audit_token" brew audit --cask --online "$name"
             fi
             brew install --cask "$name"
             if [ "$name" = affinidi-ai/tap/boris ]; then
