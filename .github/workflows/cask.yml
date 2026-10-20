@@ -4,7 +4,8 @@
 name: cask
 
 # No paths filter: `cask` is a required check on main, so it must report on
-# every pull request (it passes at once when there is no cask to check).
+# every pull request (it passes at once when the pull request neither adds
+# nor changes a cask nor changes this workflow).
 on:
   pull_request:
 
@@ -28,14 +29,28 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 20
     steps:
+      # The checkout is the pull request's merge commit, whose first parent
+      # is the tip of the base branch, so two commits are enough for the last
+      # step to tell what this pull request changes.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          fetch-depth: 2
           persist-credentials: false
 
       - name: No install-time steps, no quarantine handling, versioned URLs
         run: |
           set -eu
           [ -d Casks ] || { echo "no Casks/ yet: nothing to check"; exit 0; }
+          # brew loads a cask by name from any depth under Casks/ and prefers
+          # the longest path, so a file in a subfolder would replace the one
+          # scanned here and skip its CODEOWNERS line: casks stay top-level.
+          nested=$(find Casks -mindepth 2 -name '*.rb')
+          if [ -n "$nested" ]; then
+            printf '%s\n' "$nested" | while IFS= read -r f; do
+              echo "::error file=$f::a cask goes directly in Casks/, not in a subfolder"
+            done
+            exit 1
+          fi
           for f in Casks/*.rb; do
             if grep -v '^ *#' "$f" | grep -Eiq 'preflight|postflight|uninstall_preflight|uninstall_postflight|system_command|quarantine|xattr|installer'; then
               echo "::error file=$f::a cask here runs no step of its own and never touches quarantine"
@@ -46,6 +61,10 @@ jobs:
             grep -Eq '^  url "https://[a-z0-9.-]+/boris/v#\{version\}/boris-#\{version\}-#\{arch\}-apple-darwin\.tar\.gz"$' Casks/boris.rb ||
               { echo "::error file=Casks/boris.rb::url must be the immutable https://<release host>/boris/v#{version}/ archive"; exit 1; }
           fi
+          if [ -f Casks/fabric.rb ]; then
+            grep -Eq '^  url "https://github\.com/affinidi-ai/affinidi-trust-fabric-cli/releases/download/v#\{version\}/fabric-#\{version\}-#\{arch\}-apple-darwin\.tar\.gz"$' Casks/fabric.rb ||
+              { echo "::error file=Casks/fabric.rb::url must be the versioned https://github.com/affinidi-ai/affinidi-trust-fabric-cli/releases/download/v#{version}/ archive"; exit 1; }
+          fi
 
       - name: Tap this checkout
         run: |
@@ -55,11 +74,32 @@ jobs:
           rm -rf "$tap"
           cp -R "$GITHUB_WORKSPACE" "$tap"
 
+      # The casks this pull request adds or changes, or every cask when it
+      # changes this workflow, so a change to the check is tried on each one.
+      # A cask on main falls behind its livecheck as soon as a newer release
+      # is published, before its own pull request merges, so the audit skips
+      # the livecheck of a cask this pull request doesn't change.
       - name: Style, audit, install, run
+        env:
+          # livecheck and the audit of a github.com url call the GitHub API,
+          # which allows few calls per hour without a token. The script moves
+          # it to an unexported variable, so only brew audit gets it, not the
+          # installed binaries.
+          AUDIT_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          [ -d Casks ] || exit 0
-          for f in Casks/*.rb; do
+          audit_token=$AUDIT_TOKEN
+          unset AUDIT_TOKEN
+          # :(glob) keeps * from matching /, so only top-level casks are
+          # listed: the same set the first step's shell glob scans.
+          changed=$(git diff --name-only --diff-filter=d HEAD^1 HEAD -- ':(glob)Casks/*.rb')
+          if [ -n "$(git diff --name-only HEAD^1 HEAD -- .github/workflows/cask.yml)" ]; then
+            casks=$(git ls-files ':(glob)Casks/*.rb')
+          else
+            casks=$changed
+          fi
+          [ -n "$casks" ] || { echo "no cask added or changed and no change to this check: nothing to install"; exit 0; }
+          for f in $casks; do
             name="affinidi-ai/tap/$(basename "$f" .rb)"
             version=$(sed -n 's/^  version "\(.*\)"$/\1/p' "$f")
             brew style --cask "$name"
@@ -67,16 +107,25 @@ jobs:
             # the cask's livecheck reads, so livecheck cannot match an rc.
             # hosting_with_livecheck (no livecheck block) and
             # livecheck_https_availability (an https livecheck) run the same
-            # version comparison, so they are skipped with it.
-            case $version in
-              *-*) brew audit --cask --online \
-                     --except=livecheck_version,hosting_with_livecheck,livecheck_https_availability "$name" ;;
-              *) brew audit --cask --online "$name" ;;
-            esac
+            # version comparison, so they are skipped with it, for an rc and
+            # for a cask this pull request doesn't change.
+            livecheck=yes
+            case $version in *-*) livecheck=no ;; esac
+            printf '%s\n' "$changed" | grep -qxF "$f" || livecheck=no
+            if [ "$livecheck" = yes ]; then
+              HOMEBREW_GITHUB_API_TOKEN="$audit_token" brew audit --cask --online "$name"
+            else
+              HOMEBREW_GITHUB_API_TOKEN="$audit_token" brew audit --cask --online \
+                --except=livecheck_version,hosting_with_livecheck,livecheck_https_availability "$name"
+            fi
             brew install --cask "$name"
             if [ "$name" = affinidi-ai/tap/boris ]; then
               boris --version | grep -F "boris $version " ||
                 { echo "::error file=$f::the installed boris does not report $version"; exit 1; }
+            fi
+            if [ "$name" = affinidi-ai/tap/fabric ]; then
+              [ "$(fabric --version)" = "fabric $version" ] ||
+                { echo "::error file=$f::the installed fabric does not report $version"; exit 1; }
             fi
             brew uninstall --cask "$name"
           done

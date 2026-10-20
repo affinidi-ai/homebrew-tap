@@ -1,3 +1,7 @@
-# Every change, including the release pipeline's cask pull requests, needs a
-# review from this team before it reaches brew users.
+# Every change except Casks/fabric.rb, including the boris release pipeline's
+# cask pull requests, needs a review from this team before it reaches brew
+# users.
 * @affinidi-ai/boris-maintainers
+# The fabric cask is reviewed by the fabric CLI's owners instead. It comes
+# after the line above because the last matching line wins.
+/Casks/fabric.rb @affinidi-ai/affinidi-fabric-cli-codeowners
