@@ -10,9 +10,9 @@
 cask "fabric" do
   arch arm: "aarch64", intel: "x86_64"
 
-  version "0.1.2"
-  sha256 arm:   "ba511a5eb594826170103a508e49eb64986721f7df03d566a36922a6227d8d2b",
-         intel: "28a5a64ab9bc5c86a45eaa24d40ca43bd7ec4f992799fbd86923706bb7ff4fa9"
+  version "0.1.3"
+  sha256 arm:   "dba9cf3fa29c3b3489bf5bf34e4df2a17b2c8746a2786de6169001f232b03a6d",
+         intel: "21c2e8b7bd656e8c1519d2e721525b9577192c8f7f8b417e153c09d948839150"
 
   url "https://github.com/affinidi-ai/affinidi-trust-fabric-cli/releases/download/v#{version}/fabric-#{version}-#{arch}-apple-darwin.tar.gz"
   name "fabric"
