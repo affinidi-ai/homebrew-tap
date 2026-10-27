@@ -3,8 +3,13 @@
 Homebrew casks for Affinidi command-line tools.
 
 ```sh
+# macOS
 brew install --cask affinidi-ai/tap/boris
 brew upgrade --cask affinidi-ai/tap/boris
+
+# Linux
+brew install affinidi-ai/tap/boris
+brew upgrade affinidi-ai/tap/boris
 ```
 
 Always use the fully qualified name: Homebrew then trusts this one item from
@@ -12,17 +17,23 @@ this tap, not every name it could resolve.
 
 ## boris
 
-`Casks/boris.rb` installs the `boris` command-line client (macOS 12 or
+`Casks/boris.rb` installs the `boris` command-line client on macOS (12 or
 later, Apple silicon and Intel). The binary is Developer ID signed and
 notarized, so the cask has no `postflight` and never removes the quarantine
 attribute: Gatekeeper's check of the download is real.
 
+`Formula/boris.rb` installs the same release on Linux (arm64 and x86_64, a
+static musl binary). It is Linux only: a formula's download carries no
+quarantine, so on macOS Gatekeeper would never check the notarization. With
+the same name for both, brew picks the formula unless `--cask` is given, which
+is why the macOS command always carries it.
+
 ### How a new version arrives
 
-Nobody edits `Casks/boris.rb` by hand. The boris release pipeline (the
-`cli:publish:tap` job of a `cli-v<x.y.z>` tag in boris-md) renders the cask
-from the signed release and opens a pull request here on a branch
-`boris-<x.y.z>`. It never pushes to `main`. A CODEOWNER merges it; until
+Nobody edits `Casks/boris.rb` or `Formula/boris.rb` by hand. The boris
+release pipeline (the `cli:publish:tap` job of a `cli-v<x.y.z>` tag in
+boris-md) renders both from the signed release and opens one pull request
+here on a branch `boris-<x.y.z>`. It never pushes to `main`. A CODEOWNER merges it; until
 then `brew` keeps installing the previous version.
 
 The pipeline authenticates with a GitHub App installed on this repository
@@ -42,12 +53,16 @@ Before approving, check that:
   `SHA256SUMS.sig` verifies with boris-md's `clients/boris-cli/release-key.pub`);
 - the cask has no `preflight`, `postflight`, `system_command`, `xattr` or
   quarantine handling;
-- the `cask` check on the pull request passed.
+- in `Formula/boris.rb`: the same `version`, two `url`s, the
+  `aarch64-unknown-linux-musl` and `x86_64-unknown-linux-musl` archives under
+  the same versioned path, their `sha256` from the same `SHA256SUMS`, and
+  `install` is `bin.install "boris"` alone;
+- the `cask` and `formula` checks on the pull request passed.
 
 ### Rolling back
 
-Open a pull request putting `Casks/boris.rb` back to the previous version and
-merge it after review. Released archives are never deleted, so the previous
+Open a pull request putting `Casks/boris.rb` and `Formula/boris.rb` back to
+the previous version and merge it after review. Released archives are never deleted, so the previous
 URL and hashes still resolve.
 
 ## fabric
