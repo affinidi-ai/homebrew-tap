@@ -53,7 +53,7 @@ Before approving, check that:
   `SHA256SUMS.sig` verifies with boris-md's `clients/boris-cli/release-key.pub`);
 - the cask has no `preflight`, `postflight`, `system_command`, `xattr` or
   quarantine handling;
-- in `Formula/boris.rb`: the same `version`, two `url`s, the
+- in `Formula/boris.rb` (no `version` line: brew reads it from the url): two `url`s, the
   `aarch64-unknown-linux-musl` and `x86_64-unknown-linux-musl` archives under
   the same versioned path, their `sha256` from the same `SHA256SUMS`, and
   `install` is `bin.install "boris"` alone;

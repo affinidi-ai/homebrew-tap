@@ -206,11 +206,12 @@ jobs:
           [ -n "$formulae" ] || { echo "no formula added or changed and no change to this check: nothing to install"; exit 0; }
           for f in $formulae; do
             name="affinidi-ai/tap/$(basename "$f" .rb)"
-            version=$(sed -n 's/^  version "\(.*\)"$/\1/p' "$f")
             brew style --formula "$name"
             HOMEBREW_GITHUB_API_TOKEN="$audit_token" brew audit --formula --online "$name"
             brew install --formula "$name"
             if [ "$name" = affinidi-ai/tap/boris ]; then
+              # No version line in a formula: brew scans it from the url.
+              version=$(sed -n 's|^    url ".*/boris-\(.*\)-x86_64-unknown-linux-musl\.tar\.gz"$|\1|p' "$f")
               "$(brew --prefix)/bin/boris" --version | grep -F "boris $version " ||
                 { echo "::error file=$f::the installed boris does not report $version"; exit 1; }
             fi
