@@ -4,16 +4,27 @@
 # versioned archive and each sha256 comes from the signed SHA256SUMS. There is
 # no postflight and no quarantine removal: the binary is Developer ID signed
 # and notarized, so Gatekeeper's check of the quarantined download is real.
+# The same cask installs the static musl binary on Linux (Homebrew's casks
+# support Linux), so one name and one command serve both.
 #
 #   brew install --cask affinidi-ai/tap/boris
 cask "boris" do
   arch arm: "aarch64", intel: "x86_64"
+  os macos: "apple-darwin", linux: "unknown-linux-musl"
 
-  version "0.1.17"
-  sha256 arm:   "5a009fa03cbebee0e45aca6791d3492ce1258005c6fedb38a1ed4db1c11d38c0",
-         intel: "4d436c47359e4a8aeff8d259a3c8f85624de362f57162ed1b779971bd6a61edb"
+  version "0.1.19"
+  sha256 arm:          "6b3b907afa73415cd5bdf1ad87946dbb74ac9d54382610072f505e89608bec08",
+         intel:        "6dbdbfa0332e0a44397ad08684e895f04fc2469e3525738d9b1351a4401c897d",
+         arm64_linux:  "57a93c3de2b314680716f71b2c2c6a861d1afc4f4e329c7b36cbbc3be40c76cd",
+         x86_64_linux: "eb60d230881b383f5049d5a2e563cdd2f10bac88a3f1b5f95042a02ad1b20157"
 
-  url "https://releases.trustboris.ai/boris/v#{version}/boris-#{version}-#{arch}-apple-darwin.tar.gz"
+  # Inside on_macos: a top-level macOS requirement would make the cask
+  # macOS only. Homebrew's stanza order puts on_* blocks here, before url.
+  on_macos do
+    depends_on macos: :monterey
+  end
+
+  url "https://releases.trustboris.ai/boris/v#{version}/boris-#{version}-#{arch}-#{os}.tar.gz"
   name "boris"
   desc "Command-line client for Boris: sign in, plan and apply changes, run the tunnel"
   homepage "https://trustboris.ai/cli"
@@ -26,8 +37,6 @@ cask "boris" do
       json["version"]
     end
   end
-
-  depends_on macos: :monterey
 
   binary "boris"
 end
