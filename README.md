@@ -3,37 +3,29 @@
 Homebrew casks for Affinidi command-line tools.
 
 ```sh
-# macOS
+# macOS and Linux
 brew install --cask affinidi-ai/tap/boris
 brew upgrade --cask affinidi-ai/tap/boris
-
-# Linux
-brew install affinidi-ai/tap/boris
-brew upgrade affinidi-ai/tap/boris
 ```
 
 Always use the fully qualified name: Homebrew then trusts this one item from
-this tap, not every name it could resolve.
+this tap, with no prompt. A bare name (`brew upgrade boris`) only loads items
+of a tap you trust: `brew trust affinidi-ai/tap` once, if you want that.
 
 ## boris
 
 `Casks/boris.rb` installs the `boris` command-line client on macOS (12 or
-later, Apple silicon and Intel). The binary is Developer ID signed and
-notarized, so the cask has no `postflight` and never removes the quarantine
-attribute: Gatekeeper's check of the download is real.
-
-`Formula/boris.rb` installs the same release on Linux (arm64 and x86_64, a
-static musl binary). It is Linux only: a formula's download carries no
-quarantine, so on macOS Gatekeeper would never check the notarization. With
-the same name for both, brew picks the formula unless `--cask` is given, which
-is why the macOS command always carries it.
+later, Apple silicon and Intel) and on Linux (arm64 and x86_64, a static musl
+binary). On macOS the binary is Developer ID signed and notarized, so the
+cask has no `postflight` and never removes the quarantine attribute:
+Gatekeeper's check of the download is real.
 
 ### How a new version arrives
 
-Nobody edits `Casks/boris.rb` or `Formula/boris.rb` by hand. The boris
-release pipeline (the `cli:publish:tap` job of a `cli-v<x.y.z>` tag in
-boris-md) renders both from the signed release and opens one pull request
-here on a branch `boris-<x.y.z>`. It never pushes to `main`. A CODEOWNER merges it; until
+Nobody edits `Casks/boris.rb` by hand. The boris release pipeline (the
+`cli:publish:tap` job of a `cli-v<x.y.z>` tag in boris-md) renders it from
+the signed release and opens a pull request here on a branch
+`boris-<x.y.z>`. It never pushes to `main`. A CODEOWNER merges it; until
 then `brew` keeps installing the previous version.
 
 The pipeline authenticates with a GitHub App installed on this repository
@@ -46,23 +38,21 @@ Before approving, check that:
 
 - the title and `version` are the `cli-v<x.y.z>` tag that was released, and
   the boris-md pipeline for that tag passed `cli:release:check`;
-- `url` is `https://<release host>/boris/v#{version}/boris-#{version}-#{arch}-apple-darwin.tar.gz`,
+- `url` is `https://<release host>/boris/v#{version}/boris-#{version}-#{arch}-#{os}.tar.gz`,
   the immutable versioned path, on the release host boris-md commits in
-  `clients/boris-cli/release-host`;
-- both `sha256` values match the release's `SHA256SUMS` (whose signature
-  `SHA256SUMS.sig` verifies with boris-md's `clients/boris-cli/release-key.pub`);
+  `clients/boris-cli/release-host` (`os` is `apple-darwin` or
+  `unknown-linux-musl`);
+- all four `sha256` values (`arm`, `intel`, `arm64_linux`, `x86_64_linux`)
+  match the release's `SHA256SUMS` (whose signature `SHA256SUMS.sig`
+  verifies with boris-md's `clients/boris-cli/release-key.pub`);
 - the cask has no `preflight`, `postflight`, `system_command`, `xattr` or
-  quarantine handling;
-- in `Formula/boris.rb` (no `version` line: brew reads it from the url): two `url`s, the
-  `aarch64-unknown-linux-musl` and `x86_64-unknown-linux-musl` archives under
-  the same versioned path, their `sha256` from the same `SHA256SUMS`, and
-  `install` is `bin.install "boris"` alone;
-- the `cask` and `formula` checks on the pull request passed.
+  quarantine handling, and its macOS requirement is inside `on_macos`;
+- the `cask` (macOS) and `cask-linux` checks on the pull request passed.
 
 ### Rolling back
 
-Open a pull request putting `Casks/boris.rb` and `Formula/boris.rb` back to
-the previous version and merge it after review. Released archives are never deleted, so the previous
+Open a pull request putting `Casks/boris.rb` back to the previous version
+and merge it after review. Released archives are never deleted, so the previous
 URL and hashes still resolve.
 
 ## fabric

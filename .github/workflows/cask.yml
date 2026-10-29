@@ -1,12 +1,13 @@
 # Checks every cask pull request before a CODEOWNER reviews it: no install-time
 # steps or quarantine handling, Homebrew's style and audit, then a real install
-# from the cask's own URL and hashes, and the installed binary's version. The
-# `formula` job does the same for the Linux formulae, on a Linux runner.
+# from the cask's own URL and hashes, and the installed binary's version. It
+# runs twice: `cask` on macOS, and `cask-linux` on Linux for the casks that
+# support Linux (boris; a cask with a top-level macOS requirement is skipped).
 name: cask
 
-# No paths filter: `cask` is a required check on main, so it must report on
-# every pull request (it passes at once when the pull request neither adds
-# nor changes a cask nor changes this workflow).
+# No paths filter: `cask` and `cask-linux` are required checks on main, so
+# they must report on every pull request (each passes at once when the pull
+# request neither adds nor changes a cask nor changes this workflow).
 on:
   pull_request:
 
@@ -27,7 +28,18 @@ jobs:
     # Only branches of this repository (the release pipeline's): a fork's
     # pull request would make the runner download and run whatever it names.
     if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: macos-15
+    # The job names are the required checks' contexts (admin repo).
+    name: ${{ matrix.check }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check: cask
+            runner: macos-15
+          # x86_64 only: the hosted arm64 Linux runner ships no Homebrew.
+          - check: cask-linux
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
       # The checkout is the pull request's merge commit, whose first parent
@@ -59,7 +71,7 @@ jobs:
             fi
           done
           if [ -f Casks/boris.rb ]; then
-            grep -Eq '^  url "https://[a-z0-9.-]+/boris/v#\{version\}/boris-#\{version\}-#\{arch\}-apple-darwin\.tar\.gz"$' Casks/boris.rb ||
+            grep -Eq '^  url "https://[a-z0-9.-]+/boris/v#\{version\}/boris-#\{version\}-#\{arch\}-#\{os\}\.tar\.gz"$' Casks/boris.rb ||
               { echo "::error file=Casks/boris.rb::url must be the immutable https://<release host>/boris/v#{version}/ archive"; exit 1; }
           fi
           if [ -f Casks/fabric.rb ]; then
@@ -67,6 +79,22 @@ jobs:
               { echo "::error file=Casks/fabric.rb::url must be the versioned https://github.com/affinidi-ai/affinidi-trust-fabric-cli/releases/download/v#{version}/ archive"; exit 1; }
           fi
 
+      # The Linux runner image ships Homebrew, not on PATH.
+      - name: Brew on PATH
+        if: runner.os == 'Linux'
+        run: |
+          echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"
+          echo /home/linuxbrew/.linuxbrew/sbin >> "$GITHUB_PATH"
+
+      # The runner image's Homebrew can lag behind; casks on Linux need a
+      # recent one.
+      - name: Update Homebrew
+        run: |
+          brew update --quiet
+          brew --version
+
+      # Trusts this one tap: it is this pull request's own checkout, and
+      # brew style and audit load its casks by name.
       - name: Tap this checkout
         run: |
           set -eu
@@ -74,6 +102,7 @@ jobs:
           mkdir -p "$(dirname "$tap")"
           rm -rf "$tap"
           cp -R "$GITHUB_WORKSPACE" "$tap"
+          brew trust affinidi-ai/tap
 
       # The casks this pull request adds or changes, or every cask when it
       # changes this workflow, so a change to the check is tried on each one.
@@ -102,6 +131,11 @@ jobs:
           [ -n "$casks" ] || { echo "no cask added or changed and no change to this check: nothing to install"; exit 0; }
           for f in $casks; do
             name="affinidi-ai/tap/$(basename "$f" .rb)"
+            # A top-level macOS requirement makes a cask macOS only.
+            if [ "$RUNNER_OS" = Linux ] && grep -q '^  depends_on macos:' "$f"; then
+              echo "$name is macOS only: not checked on Linux"
+              continue
+            fi
             version=$(sed -n 's/^  version "\(.*\)"$/\1/p' "$f")
             brew style --cask "$name"
             # A pre-release never moves the release host's latest.json, which
@@ -134,87 +168,4 @@ jobs:
                 { echo "::error file=$f::the installed fabric does not report $version"; exit 1; }
             fi
             brew uninstall --cask "$name"
-          done
-
-  # The Linux formulae (Formula/*.rb), for Linux only: macOS installs the casks.
-  # x86_64 only: the hosted arm64 Linux runner ships no Homebrew.
-  formula:
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-
-      - name: Install-only formulae, versioned URLs
-        run: |
-          set -eu
-          [ -d Formula ] || { echo "no Formula/ yet: nothing to check"; exit 0; }
-          nested=$(find Formula -mindepth 2 -name '*.rb')
-          if [ -n "$nested" ]; then
-            printf '%s\n' "$nested" | while IFS= read -r f; do
-              echo "::error file=$f::a formula goes directly in Formula/, not in a subfolder"
-            done
-            exit 1
-          fi
-          # A formula here downloads a released binary and installs it: no
-          # build, no hook, no shell-out at install time.
-          for f in Formula/*.rb; do
-            if grep -v '^ *#' "$f" | grep -Eq 'post_install|system |system\(|Utils\.|xattr|quarantine|resource '; then
-              echo "::error file=$f::a formula here installs its binary and runs no step of its own"
-              exit 1
-            fi
-          done
-          if [ -f Formula/boris.rb ]; then
-            n=$(grep -Ec '^    url "https://[a-z0-9.-]+/boris/v[0-9][^/"]*/boris-[0-9][^/"]*-(aarch64|x86_64)-unknown-linux-musl\.tar\.gz"$' Formula/boris.rb || true)
-            [ "$n" = 2 ] ||
-              { echo "::error file=Formula/boris.rb::both urls must be immutable https://<release host>/boris/v<version>/ Linux archives"; exit 1; }
-          fi
-
-      # The runner image ships Homebrew, not on PATH.
-      - name: Brew on PATH
-        run: |
-          echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"
-          echo /home/linuxbrew/.linuxbrew/sbin >> "$GITHUB_PATH"
-
-      - name: Tap this checkout
-        run: |
-          set -eu
-          tap="$(brew --repository)/Library/Taps/affinidi-ai/homebrew-tap"
-          mkdir -p "$(dirname "$tap")"
-          rm -rf "$tap"
-          cp -R "$GITHUB_WORKSPACE" "$tap"
-
-      # The formulae this pull request adds or changes, or every one when it
-      # changes this workflow. A formula's audit has no livecheck comparison,
-      # so an rc needs no exception here.
-      - name: Style, audit, install, test
-        env:
-          AUDIT_TOKEN: ${{ github.token }}
-        run: |
-          set -eu
-          audit_token=$AUDIT_TOKEN
-          unset AUDIT_TOKEN
-          changed=$(git diff --name-only --diff-filter=d HEAD^1 HEAD -- ':(glob)Formula/*.rb')
-          if [ -n "$(git diff --name-only HEAD^1 HEAD -- .github/workflows/cask.yml)" ]; then
-            formulae=$(git ls-files ':(glob)Formula/*.rb')
-          else
-            formulae=$changed
-          fi
-          [ -n "$formulae" ] || { echo "no formula added or changed and no change to this check: nothing to install"; exit 0; }
-          for f in $formulae; do
-            name="affinidi-ai/tap/$(basename "$f" .rb)"
-            brew style --formula "$name"
-            HOMEBREW_GITHUB_API_TOKEN="$audit_token" brew audit --formula --online "$name"
-            brew install --formula "$name"
-            if [ "$name" = affinidi-ai/tap/boris ]; then
-              # No version line in a formula: brew scans it from the url.
-              version=$(sed -n 's|^    url ".*/boris-\(.*\)-x86_64-unknown-linux-musl\.tar\.gz"$|\1|p' "$f")
-              "$(brew --prefix)/bin/boris" --version | grep -F "boris $version " ||
-                { echo "::error file=$f::the installed boris does not report $version"; exit 1; }
-            fi
-            brew test "$name"
-            brew uninstall --formula "$name"
           done
