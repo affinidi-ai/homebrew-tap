@@ -12,11 +12,11 @@ cask "boris" do
   arch arm: "aarch64", intel: "x86_64"
   os macos: "apple-darwin", linux: "unknown-linux-musl"
 
-  version "0.1.32"
-  sha256 arm:          "f3f63d5b71a102ed836e0d476d65e781724f99d33b5b92099fe2ade4bde2af39",
-         intel:        "dce548ea20a2a08f0f4da55d21fe44d6669218119ffc42f24f08a8f7f6b77871",
-         arm64_linux:  "19684042d8b1d7f6c674b9e5327dd24b4bbc0d05926e2e7c9b878bc242da066a",
-         x86_64_linux: "2d2c393b7cb7b37f8873c20f2a94b0646dcbc2af39d35db10ebbc0341694782c"
+  version "0.1.33"
+  sha256 arm:          "35acb3ea3be03545bca251e805a830d6426e64a437a5b500ee3e6a789bffed7a",
+         intel:        "62c098e868744d374d81197c96cf648be224843fdff3db954a858d70b7e89f2b",
+         arm64_linux:  "414a7a4dfaffcfec9294748672444eac80513aee5c91a454900a7af67f2e7695",
+         x86_64_linux: "904bf1992441dbf858ddf95f292690d355fb34efdd1a8a0bf15ac6fa20863222"
 
   # Inside on_macos: a top-level macOS requirement would make the cask
   # macOS only. Homebrew's stanza order puts on_* blocks here, before url.
